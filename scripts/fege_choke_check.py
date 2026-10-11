@@ -1474,11 +1474,71 @@ def _attach_chart_peaks(work: pd.DataFrame, records: list[dict], chart_start, ch
 
 
 def _write_oss_chart_value(ws, row: int, col: int, value, fmt) -> None:
-    """Write one Site List OSS number onto the chart header. Blank when missing."""
+    """Write one Site List OSS number. Blank when the site has no BusyHour row."""
     if value is None or not np.isfinite(value):
         ws.write_blank(row, col, None, fmt)
     else:
         ws.write_number(row, col, float(value), fmt)
+
+
+def _chart_side_table(ws, top: int, busy: dict, formats: dict) -> None:
+    """OSS 4H/1H block to the right of the hourly chart. No title above it."""
+    col = 12
+    header = top + 4
+    ws.write(header, col, "Busy Hour", formats["head"])
+    ws.write(header, col + 1, "KPI", formats["head"])
+    ws.write(header, col + 2, "Value", formats["head"])
+    blocks = (
+        (
+            "4H",
+            "data4",
+            (
+                ("DL Throughput 4h (Mbps)", "tp_data_4h"),
+                ("DLPRBUtilization,%", "prb_data_4h"),
+                ("Data Volume 4h (GB)", "vol_data_4h"),
+                ("Max User 4h", "users_data_4h"),
+            ),
+        ),
+        (
+            "4H",
+            "user4",
+            (
+                ("DL Throughput 4h (Mbps)", "tp_user_4h"),
+                ("DLPRBUtilization,%", "prb_user_4h"),
+                ("Data Volume 4h (GB)", "vol_user_4h"),
+                ("Max User 4h", "users_user_4h"),
+            ),
+        ),
+        (
+            "1H",
+            "data1",
+            (
+                ("DL Throughput 1h (Mbps)", "tp_data_1h"),
+                ("DLPRBUtilization,%", "prb_data_1h"),
+                ("Data Volume 1h (GB)", "vol_data_1h"),
+                ("Max User 1h", "users_data_1h"),
+            ),
+        ),
+        (
+            "1H",
+            "user1",
+            (
+                ("DL Throughput 1h (Mbps)", "tp_user_1h"),
+                ("DLPRBUtilization,%", "prb_user_1h"),
+                ("Data Volume 1h (GB)", "vol_user_1h"),
+                ("Max User 1h", "users_user_1h"),
+            ),
+        ),
+    )
+    row = header + 1
+    for label, kind, kpis in blocks:
+        body = formats[kind]
+        hour = formats[f"{kind}_hour"]
+        ws.merge_range(row, col, row + len(kpis) - 1, col, label, hour)
+        for offset, (name, key) in enumerate(kpis):
+            ws.write(row + offset, col + 1, name, body)
+            _write_oss_chart_value(ws, row + offset, col + 2, busy.get(key), formats[f"{kind}_num"])
+        row += len(kpis)
 
 
 def _write_snapshots(
@@ -1495,36 +1555,57 @@ def _write_snapshots(
     # The chart is about one screen wide, so it does not need a long sheet.
     for col, width in enumerate([18, 16, 18, 16, 18, 16, 18, 16]):
         ws.set_column(col, col, width)
-    for col in range(8, 16):
-        ws.set_column(col, col, 13)
+    # Gap after the 1200px chart, then Busy Hour / KPI / Value.
+    for col in range(8, 12):
+        ws.set_column(col, col, 12)
+    ws.set_column(12, 12, 12)
+    ws.set_column(13, 13, 28)
+    ws.set_column(14, 14, 12)
     busy_by_site = {row["site"]: row for row in (busy_rows or [])}
-    oss_titles = ("4H TP,Mbps", "4H Data,GB", "1H TP,Mbps", "1H Data GB")
-    oss_data_keys = ("tp_data_4h", "vol_data_4h", "tp_data_1h", "vol_data_1h")
-    oss_user_keys = ("tp_user_4h", "vol_user_4h", "tp_user_1h", "vol_user_1h")
-    fmt_oss_head = book.add_format(
-        {
+
+    def _side_fmt(bg: str, *, num: bool = False, hour: bool = False):
+        spec = {
             "font_name": "Calibri",
             "bold": True,
-            "font_size": 8,
-            "align": "center",
+            "font_size": 9 if not hour else 12,
+            "font_color": "white",
+            "align": "center" if hour or num else "left",
             "valign": "vcenter",
-            "text_wrap": True,
-            "bg_color": PALE,
-            "font_color": GREY,
+            "bg_color": bg,
+            "border": 1,
+            "border_color": "white",
         }
-    )
-    fmt_oss_val = book.add_format(
-        {
-            "font_name": "Calibri",
-            "bold": True,
-            "font_size": 12,
-            "align": "center",
-            "valign": "vcenter",
-            "num_format": "0.00",
-            "bg_color": PALE,
-            "font_color": NAVY,
-        }
-    )
+        if num:
+            spec["num_format"] = "0.00"
+        return book.add_format(spec)
+
+    side_formats = {
+        "head": book.add_format(
+            {
+                "font_name": "Calibri",
+                "bold": True,
+                "font_size": 10,
+                "font_color": "white",
+                "align": "center",
+                "valign": "vcenter",
+                "bg_color": NAVY,
+                "border": 1,
+                "border_color": "white",
+            }
+        ),
+        "data4": _side_fmt("#C65911"),
+        "data4_num": _side_fmt("#C65911", num=True),
+        "data4_hour": _side_fmt("#C65911", hour=True),
+        "user4": _side_fmt("#B7950B"),
+        "user4_num": _side_fmt("#B7950B", num=True),
+        "user4_hour": _side_fmt("#B7950B", hour=True),
+        "data1": _side_fmt("#6C3483"),
+        "data1_num": _side_fmt("#6C3483", num=True),
+        "data1_hour": _side_fmt("#6C3483", hour=True),
+        "user1": _side_fmt("#1A5276"),
+        "user1_num": _side_fmt("#1A5276", num=True),
+        "user1_hour": _side_fmt("#1A5276", hour=True),
+    }
 
     anchors: dict[str, int] = {}
     # Fixed stride so the site list can link to row i * BLOCK_ROWS + 1.
@@ -1605,8 +1686,6 @@ def _write_snapshots(
             + ("    ·    sample snap" if rec["reference"] else "")
         )
         ws.merge_range(top, 0, top, 7, banner, styles["banner"])
-        ws.merge_range(top, 8, top, 11, "Data Busy Hour", styles["banner"])
-        ws.merge_range(top, 12, top, 15, "User Busy Hour", styles["banner"])
 
         labels = [
             (0, "Tx Total BW (Mbit/s)", f"{rec['bw']:.2f}"),
@@ -1614,23 +1693,14 @@ def _write_snapshots(
             (4, "Hours on cap (all 24h)", f"{rec['hours_on']} / {rec['hours_n']}  ({rec['hours_pct']:.1f}%)"),
             (6, "Days on cap (≥3h)", f"{rec['days_on_cap']} / {rec['days_total']}"),
         ]
-        ws.set_row(top + 1, 22)
+        ws.set_row(top + 1, 16)
         ws.set_row(top + 2, 20)
         for col, label, _value in labels:
             ws.merge_range(top + 1, col, top + 1, col + 1, label, styles["kpi_label"])
         for col, _label, value in labels:
             ws.merge_range(top + 2, col, top + 2, col + 1, value, styles["kpi_value"])
-
-        # OSS numbers sit on the same two rows as the other chart KPIs.
-        busy = busy_by_site.get(site, {})
-        for offset, title in enumerate(oss_titles):
-            ws.write(top + 1, 8 + offset, title, fmt_oss_head)
-            ws.write(top + 1, 12 + offset, title, fmt_oss_head)
-        for offset, key in enumerate(oss_data_keys):
-            _write_oss_chart_value(ws, top + 2, 8 + offset, busy.get(key), fmt_oss_val)
-        for offset, key in enumerate(oss_user_keys):
-            _write_oss_chart_value(ws, top + 2, 12 + offset, busy.get(key), fmt_oss_val)
         ws.set_row(top + 3, 8)
+        _chart_side_table(ws, top, busy_by_site.get(site, {}), side_formats)
 
         if n == 0:
             ws.merge_range(
@@ -2744,7 +2814,7 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output",
-        default="FEGE_Choked_Flat_Sites_NCCD_v2.xlsx",
+        default="FEGE_Choked_Flat_Sites_NCCD_v3.xlsx",
         help="Report workbook to write",
     )
     parser.add_argument(
