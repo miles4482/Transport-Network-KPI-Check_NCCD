@@ -218,13 +218,32 @@ Thana summary: Name / Count pairs sized from the thana count. More thanas add pa
 
 Do **not** read `OSS KPI Hourly site  level.rar`.
 
-Build site-hour OSS from the cell-level parts (`OSS KPI Hourly Cel Level_*`):
+### NCCD file layout (one date = four RARs)
 
-1. Combine the part RARs.
-2. Layer token = Excel `MID(Cell Name, 8, 3)` (1-based start 8, length 3).
-3. **Drop L900** when the token starts with `L09`.
-4. **Keep** L2100 (`L21`), L2600 (`L26`), and everything else as L1800 capacity.
-5. Roll remaining cells to one row per site-hour (`Date`, `Time`, `eNodeB Name`).
+For each date there are four files. Example for 8 Oct:
+
+- `OSS KPI Hourly Cel Level_08Oct_V1.part1.rar`
+- `OSS KPI Hourly Cel Level_08Oct_V1.part2.rar`
+- `OSS KPI Hourly Cel Level_08Oct_V2.part1.rar`
+- `OSS KPI Hourly Cel Level_08Oct_V2.part2.rar`
+
+Merge in this order, then do the same for every other date:
+
+1. Merge V1 part1 + V1 part2 to get the V1 file.
+2. Merge V2 part1 + V2 part2 to get the V2 file.
+3. Merge V1 + V2 to get the final file for that date.
+4. Repeat for the other dates, then combine those daily finals before the cell-to-site rollup.
+
+Do not start this merge, and do not build a report, until the user confirms that every file has been uploaded.
+
+### Cell rollup
+
+Build site-hour OSS from those final daily cell files:
+
+1. Layer token = Excel `MID(Cell Name, 8, 3)` (1-based start 8, length 3).
+2. **Drop L900** when the token starts with `L09`.
+3. **Keep** L2100 (`L21`), L2600 (`L26`), and everything else as L1800 capacity.
+4. Roll remaining cells to one row per site-hour (`Date`, `Time`, `eNodeB Name`).
 
 Aggregation:
 
@@ -376,4 +395,4 @@ Default output name follows the presentation version. Changing maps or Dashboard
 - Do not add Data Volume, Max User, or DLPRBUtilization,% into BH Flag.
 - Do not drop geo-located issue sites off the maps.
 - Do not commit combined KPI CSVs or RAR working files.
-- Do not produce an NCCD report until the user has provided the latest files.
+- Do not merge the OSS RARs, and do not produce an NCCD report, until the user confirms that every file has been uploaded.
