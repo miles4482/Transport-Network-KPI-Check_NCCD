@@ -1,0 +1,12 @@
+---
+description: FEGE choke rules for the NCCD zone, copied from the Dhaka v84 agent
+alwaysApply: true
+---
+
+Follow `RULES.md` in the repo root. Those are the last FEGE site-choking rules (v84) copied from agent `bc-a7709455-0c4d-48fe-8e9d-0c3e0f5a86b3` (Fege site choking detection_Huawei).
+
+This repo is the NCCD zone. Use the same detection, listing, severity, chart, GeoPlot, UrgentTxBWInc, capacity-only OSS rollup, BusyHour flags, Site List 4H/1H block, and Comparison rules.
+
+Do not build or publish a report until the user has provided the latest NCCD files. When the files arrive, score the dates in those files and keep every threshold in `RULES.md`. DHAPT35 and DHAPT48 are the shape pattern, not an NCCD name filter.
+
+Keep the BusyHour column spelling **Chocked**. Do not use Tx Total BW to list or grade a site. Do not read the old site-level OSS RAR; roll cell-level OSS to site-hour and drop L900 (`MID(Cell Name, 8, 3)` starts with `L09`).
