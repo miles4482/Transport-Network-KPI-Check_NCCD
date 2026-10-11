@@ -25,7 +25,7 @@ Dates, `V1` / `V2`, and `part1` / `part2` in the name say how to combine that fi
 
 `OSS` and `FEG` use the same combine order. For each date, merge that version’s part1 + part2, then merge the versions (V1 + V2) into the final file for that date. Keep OSS finals and FEG finals separate. If a later upload uses a different version or part count, follow the tokens in the names the same way.
 
-Do not start the merge, and do not build a report, until the user confirms that every file has been uploaded.
+The user confirmed the NCCD upload on 11 Oct 2026, with one exception: the previous FEG file for the Comparison sheet is not uploaded. Skip the Comparison sheet until that file is provided.
 
 ---
 
@@ -264,7 +264,7 @@ If a date is split the same way as OSS, merge it the same way:
 3. Merge V1 + V2 to get the final FEG file for that date.
 4. Repeat for the other dates, then combine those daily finals before detection.
 
-Do not mix a FEG final into the OSS cell rollup. Do not start this merge, and do not build a report, until the user confirms that every file has been uploaded.
+Do not mix a FEG final into the OSS cell rollup. The 8–10 Oct 2026 NCCD report is already built from the confirmed upload. Skip Comparison until the previous FEG file arrives.
 
 ### Cell rollup
 
@@ -383,6 +383,10 @@ Night Rx and sample-snap text are not on Site List.
 
 ## 13. Comparison
 
+**Skipped until further notice.** The previous FEG file is not uploaded. Do not build the Comparison sheet, and do not invent a previous window.
+
+When that file is provided, the sheet rules are:
+
 Sheet **Comparison**. All sites. RxMaxSpeed only (no Tx Total BW columns).
 
 - Busy-hour RxMaxSpeed **p90** for hours 08:00–22:00.
@@ -425,4 +429,4 @@ Default output name follows the presentation version. Changing maps or Dashboard
 - Do not add Data Volume, Max User, or DLPRBUtilization,% into BH Flag.
 - Do not drop geo-located issue sites off the maps.
 - Do not commit combined KPI CSVs or RAR working files.
-- Do not merge the OSS RARs, and do not produce an NCCD report, until the user confirms that every file has been uploaded.
+- The confirmed 8–10 Oct 2026 upload is already scored. Do not add the Comparison sheet until the previous FEG file is provided.
