@@ -1501,28 +1501,6 @@ def _write_snapshots(
     oss_titles = ("4H TP,Mbps", "4H Data,GB", "1H TP,Mbps", "1H Data GB")
     oss_data_keys = ("tp_data_4h", "vol_data_4h", "tp_data_1h", "vol_data_1h")
     oss_user_keys = ("tp_user_4h", "vol_user_4h", "tp_user_1h", "vol_user_1h")
-    fmt_new = book.add_format(
-        {
-            "font_name": "Calibri",
-            "bold": True,
-            "font_size": 14,
-            "align": "center",
-            "valign": "vcenter",
-            "bg_color": "#FFFF00",
-            "font_color": "black",
-        }
-    )
-    fmt_group = book.add_format(
-        {
-            "font_name": "Calibri",
-            "bold": True,
-            "font_size": 11,
-            "align": "center",
-            "valign": "vcenter",
-            "bg_color": NAVY,
-            "font_color": "white",
-        }
-    )
     fmt_oss_head = book.add_format(
         {
             "font_name": "Calibri",
@@ -1531,24 +1509,20 @@ def _write_snapshots(
             "align": "center",
             "valign": "vcenter",
             "text_wrap": True,
-            "bg_color": "#D6EAF8",
-            "font_color": NAVY,
-            "border": 1,
-            "border_color": LINE,
+            "bg_color": PALE,
+            "font_color": GREY,
         }
     )
     fmt_oss_val = book.add_format(
         {
             "font_name": "Calibri",
             "bold": True,
-            "font_size": 11,
+            "font_size": 12,
             "align": "center",
             "valign": "vcenter",
             "num_format": "0.00",
-            "bg_color": "#D6EAF8",
+            "bg_color": PALE,
             "font_color": NAVY,
-            "border": 1,
-            "border_color": LINE,
         }
     )
 
@@ -1631,6 +1605,8 @@ def _write_snapshots(
             + ("    ·    sample snap" if rec["reference"] else "")
         )
         ws.merge_range(top, 0, top, 7, banner, styles["banner"])
+        ws.merge_range(top, 8, top, 11, "Data Busy Hour", styles["banner"])
+        ws.merge_range(top, 12, top, 15, "User Busy Hour", styles["banner"])
 
         labels = [
             (0, "Tx Total BW (Mbit/s)", f"{rec['bw']:.2f}"),
@@ -1638,27 +1614,23 @@ def _write_snapshots(
             (4, "Hours on cap (all 24h)", f"{rec['hours_on']} / {rec['hours_n']}  ({rec['hours_pct']:.1f}%)"),
             (6, "Days on cap (≥3h)", f"{rec['days_on_cap']} / {rec['days_total']}"),
         ]
-        ws.set_row(top + 1, 16)
+        ws.set_row(top + 1, 22)
         ws.set_row(top + 2, 20)
         for col, label, _value in labels:
             ws.merge_range(top + 1, col, top + 1, col + 1, label, styles["kpi_label"])
         for col, _label, value in labels:
             ws.merge_range(top + 2, col, top + 2, col + 1, value, styles["kpi_value"])
 
-        # OSS 4H/1H throughput and data volume, copied from 1. Site List.
-        ws.merge_range(top, 8, top, 15, "New Add", fmt_new)
-        ws.merge_range(top + 1, 8, top + 1, 11, "Data Busy Hour", fmt_group)
-        ws.merge_range(top + 1, 12, top + 1, 15, "User Busy Hour", fmt_group)
+        # OSS numbers sit on the same two rows as the other chart KPIs.
         busy = busy_by_site.get(site, {})
         for offset, title in enumerate(oss_titles):
-            ws.write(top + 2, 8 + offset, title, fmt_oss_head)
-            ws.write(top + 2, 12 + offset, title, fmt_oss_head)
-        ws.set_row(top + 2, 28)
-        ws.set_row(top + 3, 18)
+            ws.write(top + 1, 8 + offset, title, fmt_oss_head)
+            ws.write(top + 1, 12 + offset, title, fmt_oss_head)
         for offset, key in enumerate(oss_data_keys):
-            _write_oss_chart_value(ws, top + 3, 8 + offset, busy.get(key), fmt_oss_val)
+            _write_oss_chart_value(ws, top + 2, 8 + offset, busy.get(key), fmt_oss_val)
         for offset, key in enumerate(oss_user_keys):
-            _write_oss_chart_value(ws, top + 3, 12 + offset, busy.get(key), fmt_oss_val)
+            _write_oss_chart_value(ws, top + 2, 12 + offset, busy.get(key), fmt_oss_val)
+        ws.set_row(top + 3, 8)
 
         if n == 0:
             ws.merge_range(
@@ -2630,9 +2602,23 @@ def _write_geoplot(
         f"    ·    Source: {GEO_FILE} + {TOP_THANA_FILE}",
         styles["subtitle"],
     )
-    ws.set_row(2, 20)
+    missing_issue = [site for site in issue_order if site not in set(by_code.index.astype(str))]
+    if missing_issue:
+        missing_txt = (
+            f"Issue sites with no row in {GEO_FILE} ({len(missing_issue)}). "
+            "Not plotted: " + ", ".join(missing_issue)
+        )
+    else:
+        missing_txt = (
+            f"Issue sites with no row in {GEO_FILE}: none. "
+            "Every choked site in the FEG file is on the list. "
+            "None were dropped for a missing database row."
+        )
+    ws.set_row(2, 32)
+    ws.merge_range("A3:R3", missing_txt, styles["note"])
+    ws.set_row(3, 20)
     ws.merge_range(
-        "A3:R3",
+        "A4:R4",
         "National, top-thana, and cluster maps each have an issue-severity map "
         "on the right (Severe / High / Moderate / Low). "
         f"Top thanas from {TOP_THANA_FILE}, then issue clusters "
@@ -2640,7 +2626,7 @@ def _write_geoplot(
         "Coverage: Cyan = 4G, Yellow = 5G. Issue: Red = 4G, Orange = 4G+5G.",
         styles["note"],
     )
-    row = 5
+    row = 6
     paired = {slot: (title, path) for title, path, slot in maps if slot in ("national", "severity")}
     zoom_maps = [(title, path) for title, path, slot in maps if slot == "zoom"]
     zoom_sevs = [(title, path) for title, path, slot in maps if slot == "zoom_sev"]
@@ -2758,7 +2744,7 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output",
-        default="FEGE_Choked_Flat_Sites_NCCD_v1.xlsx",
+        default="FEGE_Choked_Flat_Sites_NCCD_v2.xlsx",
         help="Report workbook to write",
     )
     parser.add_argument(
@@ -3011,6 +2997,16 @@ def _write_summary(
         "A2:J2",
         f"NCCD transmission    ·    {period_txt}    ·    hourly    ·    {source_name}",
         styles["subtitle"],
+    )
+    ws.set_row(2, 36)
+    ws.merge_range(
+        "A3:J3",
+        f"Sites checked is every eNodeB in the FEG file ({n_sites:,}). "
+        "A site is not dropped because it is missing from the physical site database. "
+        "Issue sites with no database row stay on the choke list and the hourly charts. "
+        "They are named at the top of GeoPlot and are not mapped. "
+        "Sites that appear only in the OSS file are not in the FEG file, so they are not choke-scored.",
+        styles["note"],
     )
 
     tiles = [

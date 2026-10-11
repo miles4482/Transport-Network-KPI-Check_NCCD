@@ -160,7 +160,8 @@ Sheet `2. HourlyChartOfIssueSites`. One chart per issue site for the three score
 - Date is shown once per day (at 00:00). Hours 00:00–23:00. Chart title is the site name.
 - Site name on Site List jumps to its chart.
 - Hidden `_ChartData` holds the chart source.
-- To the right of the chart KPI strip, a yellow **New Add** block copies the Site List OSS numbers: Data Busy Hour and User Busy Hour, each with 4H TP,Mbps, 4H Data,GB, 1H TP,Mbps, and 1H Data GB.
+- To the right of each chart header, **Data Busy Hour** and **User Busy Hour** sit on the site-name row. The column titles (4H TP,Mbps, 4H Data,GB, 1H TP,Mbps, 1H Data GB) sit on the KPI-label row, and the numbers sit on the KPI-value row. Same values as 1. Site List.
+- Every eNodeB in the FEG file is choke-checked. A missing physical-database row does not drop the site. Issue sites with no database row are named at the top of GeoPlot and are not plotted.
 
 ### Double check
 
