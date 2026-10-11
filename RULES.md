@@ -10,6 +10,25 @@ Spelling **Chocked** on the BusyHour flag columns is intentional. Keep it.
 
 ---
 
+## How to read uploaded files
+
+Read each uploaded file from its name. Do not wait for an exact Dhaka filename, and do not ignore a file because the date, version, or part number is new. The name is the hint. Open the file and use the columns to confirm.
+
+| Hint in the file name | What the file is |
+|---|---|
+| `OSS` | OSS KPI. Cell-level hourly radio KPI for the BusyHour sheet and the Site List 4H/1H block |
+| `FEGE` or `FEG` | FEGE port KPI. `RxMaxSpeed` is the choke trace |
+| Physical site, or a site database | Latitude, longitude, district, region, thana, Tech, Site Type |
+| Thana | Top-thana list for GeoPlot |
+
+Dates, `V1` / `V2`, and `part1` / `part2` in the name say how to combine that file with the others. They do not change what the file is.
+
+For OSS, each date is still combined as already stated: merge that version’s part1 + part2, then merge the versions (V1 + V2) into the final file for that date. If a later upload uses a different version or part count, follow the tokens in the names the same way.
+
+Do not start the merge, and do not build a report, until the user confirms that every file has been uploaded.
+
+---
+
 ## 1. What a listed site is
 
 A site is an issue only when **RxMaxSpeed** is stuck on a wall:
@@ -220,7 +239,7 @@ Do **not** read `OSS KPI Hourly site  level.rar`.
 
 ### NCCD file layout (one date = four RARs)
 
-For each date there are four files. Example for 8 Oct:
+Any file whose name contains `OSS` is an OSS KPI file. The 8 Oct upload is the pattern, not the only names to accept. For each date there are four files. Example for 8 Oct:
 
 - `OSS KPI Hourly Cel Level_08Oct_V1.part1.rar`
 - `OSS KPI Hourly Cel Level_08Oct_V1.part2.rar`

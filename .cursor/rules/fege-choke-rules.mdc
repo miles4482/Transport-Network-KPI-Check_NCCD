@@ -7,6 +7,8 @@ Follow `RULES.md` in the repo root. Those are the last FEGE site-choking rules (
 
 This repo is the NCCD zone. Use the same detection, listing, severity, chart, GeoPlot, UrgentTxBWInc, capacity-only OSS rollup, BusyHour flags, Site List 4H/1H block, and Comparison rules.
 
-Do not merge OSS RARs and do not build or publish a report until the user confirms that every file has been uploaded. For each date, merge V1 part1+part2, merge V2 part1+part2, then merge V1+V2 into that day's final file, and do the same for every other date. When the user confirms, score the dates in those files and keep every threshold in `RULES.md`. DHAPT35 and DHAPT48 are the shape pattern, not an NCCD name filter.
+Read uploaded files from the name. `OSS` in the name means OSS KPI. `FEGE` or `FEG` means the FEGE port KPI. A physical-site or site-database name means geo, Tech, and Site Type. A thana name means the GeoPlot thana list. Dates, V1/V2, and part numbers say how to combine files. They do not change what the file is. Do not require the old Dhaka filenames.
+
+Do not merge OSS RARs and do not build or publish a report until the user confirms that every file has been uploaded. For each date, merge V1 part1+part2, merge V2 part1+part2, then merge V1+V2 into that day's final file, and do the same for every other date. If a later upload uses a different version or part count, follow the tokens in the names. When the user confirms, score the dates in those files and keep every threshold in `RULES.md`. DHAPT35 and DHAPT48 are the shape pattern, not an NCCD name filter.
 
 Keep the BusyHour column spelling **Chocked**. Do not use Tx Total BW to list or grade a site. Do not read the old site-level OSS RAR; roll cell-level OSS to site-hour and drop L900 (`MID(Cell Name, 8, 3)` starts with `L09`).
