@@ -1490,7 +1490,7 @@ def _chart_side_table(ws, top: int, busy: dict, formats: dict) -> None:
     ws.write(header, col + 2, "Value", formats["head"])
     blocks = (
         (
-            "4H",
+            "4H\n(Data Busy hour)",
             "data4",
             (
                 ("DL Throughput 4h (Mbps)", "tp_data_4h"),
@@ -1500,7 +1500,7 @@ def _chart_side_table(ws, top: int, busy: dict, formats: dict) -> None:
             ),
         ),
         (
-            "4H",
+            "4H\n(User Busy Hour)",
             "user4",
             (
                 ("DL Throughput 4h (Mbps)", "tp_user_4h"),
@@ -1510,7 +1510,7 @@ def _chart_side_table(ws, top: int, busy: dict, formats: dict) -> None:
             ),
         ),
         (
-            "1H",
+            "1H\n(Data Busy hour)",
             "data1",
             (
                 ("DL Throughput 1h (Mbps)", "tp_data_1h"),
@@ -1520,7 +1520,7 @@ def _chart_side_table(ws, top: int, busy: dict, formats: dict) -> None:
             ),
         ),
         (
-            "1H",
+            "1H\n(User Busy Hour)",
             "user1",
             (
                 ("DL Throughput 1h (Mbps)", "tp_user_1h"),
@@ -1558,7 +1558,7 @@ def _write_snapshots(
     # Gap after the 1200px chart, then Busy Hour / KPI / Value.
     for col in range(8, 12):
         ws.set_column(col, col, 12)
-    ws.set_column(12, 12, 12)
+    ws.set_column(12, 12, 20)
     ws.set_column(13, 13, 28)
     ws.set_column(14, 14, 12)
     busy_by_site = {row["site"]: row for row in (busy_rows or [])}
@@ -1567,13 +1567,14 @@ def _write_snapshots(
         spec = {
             "font_name": "Calibri",
             "bold": True,
-            "font_size": 9 if not hour else 12,
+            "font_size": 9 if not hour else 10,
             "font_color": "white",
             "align": "center" if hour or num else "left",
             "valign": "vcenter",
             "bg_color": bg,
             "border": 1,
             "border_color": "white",
+            "text_wrap": bool(hour),
         }
         if num:
             spec["num_format"] = "0.00"
@@ -2456,6 +2457,33 @@ def site_type_by_site_from_geo(geo: pd.DataFrame) -> dict[str, str]:
     return out
 
 
+def _apply_live_geo(
+    work: pd.DataFrame,
+    records: list[dict],
+    busy_rows: list[dict] | None = None,
+) -> tuple[pd.DataFrame, dict[str, str], dict[str, int]]:
+    """Read the current physical database and stamp Tech and Site Type."""
+    geo_path = _find_input(GEO_FILE)
+    if geo_path is None:
+        raise SystemExit(f"Physical site database not found: {GEO_FILE}")
+    geo = load_site_geo(geo_path)
+    tech_by_site = tech_by_site_from_geo(geo)
+    checked_sites = work["eNodeB Name"].astype(str).str.strip().drop_duplicates().tolist()
+    for site in checked_sites:
+        tech_by_site.setdefault(site, TECH_4G)
+    _attach_site_type(records, geo)
+    _attach_tech(records, tech_by_site)
+    if busy_rows:
+        for row in busy_rows:
+            row["tech"] = tech_by_site.get(row["site"], TECH_4G)
+        _attach_site_type(busy_rows, geo)
+    tech_summary = summarise_tech(records, tech_by_site, checked_sites)
+    db_tech = geo["tech"].astype(str).str.strip().value_counts()
+    parts = ", ".join(f"{name} {int(count)}" for name, count in db_tech.items())
+    print(f"Physical database {geo_path.name}: {len(geo)} sites ({parts})")
+    return geo, tech_by_site, tech_summary
+
+
 def _attach_site_type(records: list[dict], geo: pd.DataFrame) -> None:
     types = site_type_by_site_from_geo(geo)
     for rec in records:
@@ -2814,7 +2842,7 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output",
-        default="FEGE_Choked_Flat_Sites_NCCD_v3.xlsx",
+        default="FEGE_Choked_Flat_Sites_NCCD_v4.xlsx",
         help="Report workbook to write",
     )
     parser.add_argument(
@@ -2844,22 +2872,20 @@ def main() -> None:
         source_name = cache["source_name"]
         work = cache["work"]
         records = cache["records"]
-        geo = cache["geo"]
-        tech_summary = cache["tech_summary"]
-        tech_by_site = cache["tech_by_site"]
         busy_rows = cache["busy_rows"]
         if (
             not busy_rows
             or "prb_data_7h" not in busy_rows[0]
             or cache.get("oss_file") != OSS_FILE
         ):
+            geo, tech_by_site, tech_summary = _apply_live_geo(work, records)
             busy_rows = _refresh_busy_rows(records, work, geo, tech_by_site)
             _dump_report_cache(
                 source_name, work, records, geo, tech_summary, tech_by_site, busy_rows
             )
         else:
             busy_rows = _attach_window_filter_flags(busy_rows)
-            _attach_site_type(busy_rows, geo)
+            geo, tech_by_site, tech_summary = _apply_live_geo(work, records, busy_rows)
     else:
         source = resolve_source(Path(args.source))
         source_name = source.name
