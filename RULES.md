@@ -17,13 +17,13 @@ Read each uploaded file from its name. Do not wait for an exact Dhaka filename, 
 | Hint in the file name | What the file is |
 |---|---|
 | `OSS` | OSS KPI. Cell-level hourly radio KPI for the BusyHour sheet and the Site List 4H/1H block |
-| `FEGE` or `FEG` | FEGE port KPI. `RxMaxSpeed` is the choke trace |
+| `FEG` or `FEGE` | FEG port KPI. `RxMaxSpeed` is the choke trace. This is the detection source |
 | Physical site, or a site database | Latitude, longitude, district, region, thana, Tech, Site Type |
 | Thana | Top-thana list for GeoPlot |
 
 Dates, `V1` / `V2`, and `part1` / `part2` in the name say how to combine that file with the others. They do not change what the file is.
 
-For OSS, each date is still combined as already stated: merge that version’s part1 + part2, then merge the versions (V1 + V2) into the final file for that date. If a later upload uses a different version or part count, follow the tokens in the names the same way.
+`OSS` and `FEG` use the same combine order. For each date, merge that version’s part1 + part2, then merge the versions (V1 + V2) into the final file for that date. Keep OSS finals and FEG finals separate. If a later upload uses a different version or part count, follow the tokens in the names the same way.
 
 Do not start the merge, and do not build a report, until the user confirms that every file has been uploaded.
 
@@ -253,7 +253,18 @@ Merge in this order, then do the same for every other date:
 3. Merge V1 + V2 to get the final file for that date.
 4. Repeat for the other dates, then combine those daily finals before the cell-to-site rollup.
 
-Do not start this merge, and do not build a report, until the user confirms that every file has been uploaded.
+### FEG file layout (same merge)
+
+Any file whose name contains `FEG` or `FEGE` is the FEG port KPI. `RxMaxSpeed` from that file decides the choke list. It is not an OSS file.
+
+If a date is split the same way as OSS, merge it the same way:
+
+1. Merge V1 part1 + V1 part2 to get the V1 file.
+2. Merge V2 part1 + V2 part2 to get the V2 file.
+3. Merge V1 + V2 to get the final FEG file for that date.
+4. Repeat for the other dates, then combine those daily finals before detection.
+
+Do not mix a FEG final into the OSS cell rollup. Do not start this merge, and do not build a report, until the user confirms that every file has been uploaded.
 
 ### Cell rollup
 
