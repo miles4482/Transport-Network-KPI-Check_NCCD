@@ -1473,7 +1473,17 @@ def _attach_chart_peaks(work: pd.DataFrame, records: list[dict], chart_start, ch
         rec["double_check"] = _needs_double_check(peak_72, avg_peak)
 
 
-def _write_snapshots(book, styles, work, records, period_txt, chart_start, chart_end) -> dict[str, int]:
+def _write_oss_chart_value(ws, row: int, col: int, value, fmt) -> None:
+    """Write one Site List OSS number onto the chart header. Blank when missing."""
+    if value is None or not np.isfinite(value):
+        ws.write_blank(row, col, None, fmt)
+    else:
+        ws.write_number(row, col, float(value), fmt)
+
+
+def _write_snapshots(
+    book, styles, work, records, period_txt, chart_start, chart_end, busy_rows=None
+) -> dict[str, int]:
     ws = book.add_worksheet(SNAP_SHEET)
     _page(ws, "Hourly chart of issue sites", fit_width=False)
     ws.set_zoom(100)
@@ -1485,7 +1495,62 @@ def _write_snapshots(book, styles, work, records, period_txt, chart_start, chart
     # The chart is about one screen wide, so it does not need a long sheet.
     for col, width in enumerate([18, 16, 18, 16, 18, 16, 18, 16]):
         ws.set_column(col, col, width)
-    ws.set_column(8, 16, 11)
+    for col in range(8, 16):
+        ws.set_column(col, col, 13)
+    busy_by_site = {row["site"]: row for row in (busy_rows or [])}
+    oss_titles = ("4H TP,Mbps", "4H Data,GB", "1H TP,Mbps", "1H Data GB")
+    oss_data_keys = ("tp_data_4h", "vol_data_4h", "tp_data_1h", "vol_data_1h")
+    oss_user_keys = ("tp_user_4h", "vol_user_4h", "tp_user_1h", "vol_user_1h")
+    fmt_new = book.add_format(
+        {
+            "font_name": "Calibri",
+            "bold": True,
+            "font_size": 14,
+            "align": "center",
+            "valign": "vcenter",
+            "bg_color": "#FFFF00",
+            "font_color": "black",
+        }
+    )
+    fmt_group = book.add_format(
+        {
+            "font_name": "Calibri",
+            "bold": True,
+            "font_size": 11,
+            "align": "center",
+            "valign": "vcenter",
+            "bg_color": NAVY,
+            "font_color": "white",
+        }
+    )
+    fmt_oss_head = book.add_format(
+        {
+            "font_name": "Calibri",
+            "bold": True,
+            "font_size": 8,
+            "align": "center",
+            "valign": "vcenter",
+            "text_wrap": True,
+            "bg_color": "#D6EAF8",
+            "font_color": NAVY,
+            "border": 1,
+            "border_color": LINE,
+        }
+    )
+    fmt_oss_val = book.add_format(
+        {
+            "font_name": "Calibri",
+            "bold": True,
+            "font_size": 11,
+            "align": "center",
+            "valign": "vcenter",
+            "num_format": "0.00",
+            "bg_color": "#D6EAF8",
+            "font_color": NAVY,
+            "border": 1,
+            "border_color": LINE,
+        }
+    )
 
     anchors: dict[str, int] = {}
     # Fixed stride so the site list can link to row i * BLOCK_ROWS + 1.
@@ -1580,7 +1645,20 @@ def _write_snapshots(book, styles, work, records, period_txt, chart_start, chart
         for col, _label, value in labels:
             ws.merge_range(top + 2, col, top + 2, col + 1, value, styles["kpi_value"])
 
-        ws.set_row(top + 3, 8)
+        # OSS 4H/1H throughput and data volume, copied from 1. Site List.
+        ws.merge_range(top, 8, top, 15, "New Add", fmt_new)
+        ws.merge_range(top + 1, 8, top + 1, 11, "Data Busy Hour", fmt_group)
+        ws.merge_range(top + 1, 12, top + 1, 15, "User Busy Hour", fmt_group)
+        busy = busy_by_site.get(site, {})
+        for offset, title in enumerate(oss_titles):
+            ws.write(top + 2, 8 + offset, title, fmt_oss_head)
+            ws.write(top + 2, 12 + offset, title, fmt_oss_head)
+        ws.set_row(top + 2, 28)
+        ws.set_row(top + 3, 18)
+        for offset, key in enumerate(oss_data_keys):
+            _write_oss_chart_value(ws, top + 3, 8 + offset, busy.get(key), fmt_oss_val)
+        for offset, key in enumerate(oss_user_keys):
+            _write_oss_chart_value(ws, top + 3, 12 + offset, busy.get(key), fmt_oss_val)
 
         if n == 0:
             ws.merge_range(
@@ -3280,7 +3358,9 @@ def _write_workbook(
     else:
         print("Comparison sheet omitted.", flush=True)
     if not skip_heavy:
-        _write_snapshots(book, styles, work, records, period_txt, chart_start, chart_end)
+        _write_snapshots(
+            book, styles, work, records, period_txt, chart_start, chart_end, busy_rows
+        )
         print("Writing hourly KPI...", flush=True)
         _write_hourly(book, styles, work, records)
     _write_method(book, styles, source_name, period_txt, n_sites, records)

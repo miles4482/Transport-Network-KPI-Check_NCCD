@@ -160,6 +160,7 @@ Sheet `2. HourlyChartOfIssueSites`. One chart per issue site for the three score
 - Date is shown once per day (at 00:00). Hours 00:00–23:00. Chart title is the site name.
 - Site name on Site List jumps to its chart.
 - Hidden `_ChartData` holds the chart source.
+- To the right of the chart KPI strip, a yellow **New Add** block copies the Site List OSS numbers: Data Busy Hour and User Busy Hour, each with 4H TP,Mbps, 4H Data,GB, 1H TP,Mbps, and 1H Data GB.
 
 ### Double check
 
