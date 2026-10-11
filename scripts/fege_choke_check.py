@@ -2758,7 +2758,7 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output",
-        default="FEGE_Choked_Flat_Sites_NCCD.xlsx",
+        default="FEGE_Choked_Flat_Sites_NCCD_v1.xlsx",
         help="Report workbook to write",
     )
     parser.add_argument(
