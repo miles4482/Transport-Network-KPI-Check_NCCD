@@ -100,6 +100,7 @@ SNAP_SHEET = "2. HourlyChartOfIssueSites"
 ACTION_SHEET = "UrgentTxBWInc"
 BUSY_SHEET = "URGENTBWINC_BusyHour"
 MISSING_FEG_SHEET = "6. Missing FEG Port"
+IMMEDIATE_SHEET = "7. Immediate actions"
 OSS_FILE = "/tmp/nccd/OSS KPI Hourly site  level_capacity.csv"
 OSS_CELL_PART1_GLOB = "OSS KPI Hourly Cel Level_*.part1.rar"
 OSS_CELL_COMBINED = Path("/tmp/oss_cell_combined.csv")
@@ -2170,6 +2171,14 @@ def _write_method(book, styles, source_name, period_txt, n_sites, records):
             "is FEG versus OSS, not the physical site database. Configure the FEG port "
             "for each listed site.",
         ),
+        (
+            "Immediate actions",
+            f"Sheet {IMMEDIATE_SHEET} is Severe or High only. A site is listed when "
+            "any of Data 4H, User 4H, Data 1H, or User 1H matches (OR). "
+            "Each site is listed once, under the strongest customer-experience tag: "
+            "Data Volume > 100 GB, then DL throughput < 5 Mbps, then 5 Mbps up to "
+            "but not including 8 Mbps, then 8 to 10 Mbps.",
+        ),
     ]
     for i, (key, val) in enumerate(kept):
         r = kept_head + 1 + i
@@ -2880,7 +2889,7 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output",
-        default="FEGE_Choked_Flat_Sites_NCCD_v5.xlsx",
+        default="FEGE_Choked_Flat_Sites_NCCD_v6.xlsx",
         help="Report workbook to write",
     )
     parser.add_argument(
@@ -3528,7 +3537,277 @@ def _write_workbook(
         print("Writing GeoPlot...", flush=True)
         _write_geoplot(book, styles, work, records, geo, path, tech_by_site)
     _write_missing_feg_port(book, styles, missing_feg_sites or [])
+    _write_immediate_actions(book, styles, records, busy_rows or [])
     book.close()
+
+
+# Strongest customer-experience tag first. 8 Mbps belongs to 8–10, not to 5–8.
+_IMMEDIATE_WINDOWS = (
+    ("Data 4H", "tp_data_4h", "vol_data_4h"),
+    ("User 4H", "tp_user_4h", "vol_user_4h"),
+    ("Data 1H", "tp_data_1h", "vol_data_1h"),
+    ("User 1H", "tp_user_1h", "vol_user_1h"),
+)
+_IMMEDIATE_TAGS = (
+    ("vol", "High Priority (>100 GB & Severe, High)"),
+    ("lt5", "High Priority (User Throughput <5Mbps & Severe, High)"),
+    ("low", "Low Priority (User Throughput 8 to 10 Mbps & Severe, High)"),
+    ("mid", "Mid Priority (User Throughput 5 to 8 Mbps & Severe, High)"),
+)
+_IMMEDIATE_RANK = {"vol": 0, "lt5": 1, "mid": 2, "low": 3}
+
+
+def _finite_kpi(row: dict, key: str) -> float:
+    value = row.get(key, float("nan"))
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return float("nan")
+    return value if np.isfinite(value) else float("nan")
+
+
+def _throughput_band(tp: float) -> str | None:
+    """DL throughput band. 5 up to 8 is Mid. 8 through 10 is Low."""
+    if not np.isfinite(tp):
+        return None
+    if tp < 5:
+        return "lt5"
+    if tp < 8:
+        return "mid"
+    if tp <= 10:
+        return "low"
+    return None
+
+
+def _immediate_action_rows(records: list[dict], busy_rows: list[dict]) -> list[dict]:
+    """Severe/High sites where any 4H or 1H Data or User window matches."""
+    busy_by_site = {row["site"]: row for row in busy_rows}
+    tag_name = dict(_IMMEDIATE_TAGS)
+    selected: list[dict] = []
+    for rec in records:
+        if rec.get("severity") not in (SEV_SEVERE, SEV_HIGH):
+            continue
+        src = busy_by_site.get(rec["site"])
+        if not src:
+            continue
+        hits: dict[str, list[str]] = {key: [] for key, _name in _IMMEDIATE_TAGS}
+        for label, tp_key, vol_key in _IMMEDIATE_WINDOWS:
+            vol = _finite_kpi(src, vol_key)
+            tp = _finite_kpi(src, tp_key)
+            if np.isfinite(vol) and vol > 100:
+                hits["vol"].append(f"{label} {vol:.2f} GB")
+            band = _throughput_band(tp)
+            if band:
+                hits[band].append(f"{label} {tp:.2f} Mbps")
+        primary = next((key for key, _name in (("vol", ""), ("lt5", ""), ("mid", ""), ("low", "")) if hits[key]), None)
+        if primary is None:
+            continue
+        others = [
+            tag_name[key]
+            for key, _name in _IMMEDIATE_TAGS
+            if key != primary and hits[key]
+        ]
+        selected.append(
+            {
+                **rec,
+                "tag": tag_name[primary],
+                "tag_key": primary,
+                "why": "; ".join(hits[primary]),
+                "also": "; ".join(others),
+                "busy": src,
+            }
+        )
+    selected.sort(
+        key=lambda rec: (
+            _IMMEDIATE_RANK[rec["tag_key"]],
+            SEVERITY_ORDER[rec["severity"]],
+            -float(rec.get("hours_pct") or 0),
+            rec["site"],
+        )
+    )
+    return selected
+
+
+def _write_immediate_actions(book, styles, records: list[dict], busy_rows: list[dict]) -> None:
+    """Customer-experience list. OR across Data/User 4H and 1H."""
+    rows = _immediate_action_rows(records, busy_rows)
+    ws = book.add_worksheet(IMMEDIATE_SHEET)
+    _page(ws, "Immediate actions — Severe / High customer experience")
+    ws.set_tab_color("#C00000")
+    counts = {key: sum(1 for rec in rows if rec["tag_key"] == key) for key, _name in _IMMEDIATE_TAGS}
+
+    head = book.add_format(
+        {
+            "font_name": "Calibri",
+            "bold": True,
+            "font_size": 11,
+            "font_color": "white",
+            "align": "center",
+            "valign": "vcenter",
+            "bg_color": "#5B9BD5",
+            "border": 1,
+            "border_color": "#8FA8C4",
+        }
+    )
+    tag_fmt = book.add_format(
+        {
+            "font_name": "Calibri",
+            "font_size": 11,
+            "valign": "vcenter",
+            "border": 1,
+            "border_color": "#BFBFBF",
+            "bg_color": "#D6EAF8",
+        }
+    )
+    count_fmt = book.add_format(
+        {
+            "font_name": "Calibri",
+            "font_size": 11,
+            "align": "center",
+            "valign": "vcenter",
+            "border": 1,
+            "border_color": "#BFBFBF",
+            "bg_color": "#D6EAF8",
+            "num_format": "#,##0",
+        }
+    )
+    total_tag = book.add_format(
+        {
+            "font_name": "Calibri",
+            "bold": True,
+            "font_size": 11,
+            "valign": "vcenter",
+            "border": 1,
+            "border_color": "#BFBFBF",
+        }
+    )
+    total_num = book.add_format(
+        {
+            "font_name": "Calibri",
+            "bold": True,
+            "font_size": 11,
+            "align": "center",
+            "valign": "vcenter",
+            "border": 1,
+            "border_color": "#BFBFBF",
+            "num_format": "#,##0",
+        }
+    )
+
+    ws.set_row(0, 28)
+    ws.merge_range(0, 0, 0, 7, "Immediate actions — customer experience", styles["title"])
+    ws.set_row(1, 48)
+    ws.merge_range(
+        1,
+        0,
+        1,
+        7,
+        "Severe or High only. OR across Data 4H, User 4H, Data 1H, and User 1H: "
+        "if any one of those four windows matches, the site is listed. "
+        "Each site is listed once, under the strongest tag: Data Volume > 100 GB, "
+        "then DL throughput < 5 Mbps, then 5 Mbps up to but not including 8 Mbps, "
+        "then 8 to 10 Mbps.",
+        styles["note"],
+    )
+    display = (
+        ("vol", "High Priority (>100 GB & Severe, High)"),
+        ("lt5", "High Priority (User Throughput <5Mbps & Severe, High)"),
+        ("low", "Low Priority (User Throughput 8 to 10 Mbps & Severe, High)"),
+        ("mid", "Mid Priority (User Throughput 5 to 8 Mbps & Severe, High)"),
+    )
+    ws.set_row(3, 22)
+    ws.merge_range(3, 0, 3, 5, "TAG", head)
+    ws.write(3, 6, "Site Count", head)
+    for offset, (key, name) in enumerate(display):
+        ws.set_row(4 + offset, 20)
+        ws.merge_range(4 + offset, 0, 4 + offset, 5, name, tag_fmt)
+        ws.write_number(4 + offset, 6, counts[key], count_fmt)
+    ws.set_row(8, 20)
+    ws.merge_range(8, 0, 8, 5, "Total", total_tag)
+    ws.write_number(8, 6, len(rows), total_num)
+
+    headers = [
+        "No.",
+        "eNodeB Name",
+        "Tech",
+        "Severity",
+        "Site Type",
+        "TAG",
+        "Matched window",
+        "Also matched",
+        "DL Throughput Data 4h (Mbps)",
+        "DL Throughput User 4h (Mbps)",
+        "DL Throughput Data 1h (Mbps)",
+        "DL Throughput User 1h (Mbps)",
+        "Data Volume Data 4h (GB)",
+        "Data Volume User 4h (GB)",
+        "Data Volume Data 1h (GB)",
+        "Data Volume User 1h (GB)",
+    ]
+    kpi_keys = (
+        "tp_data_4h",
+        "tp_user_4h",
+        "tp_data_1h",
+        "tp_user_1h",
+        "vol_data_4h",
+        "vol_user_4h",
+        "vol_data_1h",
+        "vol_user_1h",
+    )
+    header_row = 10
+    ws.set_row(header_row, 32)
+    for col, text in enumerate(headers):
+        ws.write(header_row, col, text, styles["header"])
+    list_widths = [6, 16, 12, 12, 14, 62, 42, 42] + [18] * 8
+    for col, width in enumerate(list_widths):
+        if col >= 2:
+            ws.set_column(col, col, width)
+    ws.set_column(0, 0, 6)
+    ws.set_column(1, 1, 16)
+    chart_row = {rec["site"]: i * BLOCK_ROWS + 1 for i, rec in enumerate(records)}
+    for i, rec in enumerate(rows):
+        row = header_row + 1 + i
+        zebra = i % 2 == 1
+        n = styles["num_z"] if zebra else styles["num"]
+        c = styles["center_z"] if zebra else styles["center"]
+        text = styles["text_z"] if zebra else styles["text"]
+        link = styles["link_z"] if zebra else styles["link"]
+        ws.set_row(row, 18)
+        ws.write_number(row, 0, i + 1, styles["int_z"] if zebra else styles["int"])
+        if rec["site"] in chart_row:
+            ws.write_url(
+                row,
+                1,
+                f"internal:'{SNAP_SHEET}'!A{chart_row[rec['site']]}",
+                link,
+                string=rec["site"],
+            )
+        else:
+            ws.write_string(row, 1, rec["site"], text)
+        ws.write_string(row, 2, _rec_tech(rec), c)
+        ws.write_string(row, 3, rec["severity"], _severity_format(styles, rec["severity"], zebra))
+        site_type = str(rec.get("site_type") or "Not found")
+        ws.write_string(row, 4, site_type, c)
+        ws.write_string(row, 5, rec["tag"], text)
+        ws.write_string(row, 6, rec["why"], text)
+        ws.write_string(row, 7, rec["also"], text)
+        src = rec["busy"]
+        for offset, key in enumerate(kpi_keys):
+            value = _finite_kpi(src, key)
+            if np.isfinite(value):
+                ws.write_number(row, 8 + offset, value, n)
+            else:
+                ws.write_blank(row, 8 + offset, None, n)
+    last = header_row + max(len(rows), 1)
+    ws.autofilter(header_row, 0, last, len(headers) - 1)
+    ws.freeze_panes(header_row + 1, 2)
+    ws.set_zoom(100)
+    print(
+        "Immediate actions: "
+        + ", ".join(f"{name} {counts[key]}" for key, name in display)
+        + f"; total {len(rows)}",
+        flush=True,
+    )
 
 
 def _write_missing_feg_port(book, styles, sites: list[str]) -> None:
