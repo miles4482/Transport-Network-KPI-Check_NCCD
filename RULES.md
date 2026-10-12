@@ -161,7 +161,8 @@ Sheet `2. HourlyChartOfIssueSites`. One chart per issue site for the three score
 - Site name on Site List jumps to its chart.
 - Hidden `_ChartData` holds the chart source.
 - The chart header keeps only Tx Total BW, Stuck RxMaxSpeed, Hours on cap, and Days on cap.
-- To the right of each hourly chart, with a gap after the chart, a table has columns Busy Hour, KPI, and Value. It has four blocks, same numbers as 1. Site List: Data 4H (orange), User 4H (gold), Data 1H (purple), User 1H (navy). Each block lists DL Throughput, DLPRBUtilization,%, Data Volume, and Max User. The Busy Hour cell is the window plus the hour type: `4H (Data Busy hour)`, `4H (User Busy Hour)`, `1H (Data Busy hour)`, `1H (User Busy Hour)`. Do not put a title above that table.
+- To the right of each hourly chart, with a gap after the chart, a table has columns Busy Hour, KPI, and Value. It has four blocks, same numbers as 1. Site List: Data 4H (orange), User 4H (gold), Data 1H (purple), User 1H (navy). Each block lists DL Throughput, DLPRBUtilization,%, Data Volume, Max User, and Mean User (the average of Mean User over that block’s busy hours). The Busy Hour cell is the window plus the hour type: `4H (Data Busy hour)`, `4H (User Busy Hour)`, `1H (Data Busy hour)`, `1H (User Busy Hour)`. Do not put a title above that table.
+- Dashboard row 3 states how many OSS KPI sites are missing from the FEG file. Those sites are not choke-scored because the FEG port is not configured. The full list is sheet `6. Missing FEG Port`. The comparison is FEG eNodeB names versus the capacity OSS KPI, not the physical site database.
 - Every eNodeB in the FEG file is choke-checked. A missing physical-database row does not drop the site. Issue sites with no database row are named at the top of GeoPlot and are not plotted.
 
 ### Double check

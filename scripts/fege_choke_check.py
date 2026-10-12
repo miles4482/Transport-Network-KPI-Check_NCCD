@@ -99,6 +99,7 @@ REPORT_TITLE = "Transmission Link Health Review"
 SNAP_SHEET = "2. HourlyChartOfIssueSites"
 ACTION_SHEET = "UrgentTxBWInc"
 BUSY_SHEET = "URGENTBWINC_BusyHour"
+MISSING_FEG_SHEET = "6. Missing FEG Port"
 OSS_FILE = "/tmp/nccd/OSS KPI Hourly site  level_capacity.csv"
 OSS_CELL_PART1_GLOB = "OSS KPI Hourly Cel Level_*.part1.rar"
 OSS_CELL_COMBINED = Path("/tmp/oss_cell_combined.csv")
@@ -1171,6 +1172,7 @@ def load_oss_kpi(path: Path) -> pd.DataFrame:
         "eNodeB Name",
         OSS_VOL_COL,
         OSS_USER_COL,
+        OSS_MEAN_USER_COL,
         OSS_TP_N_COL,
         OSS_TP_D_COL,
         OSS_PRB_N_COL,
@@ -1185,6 +1187,7 @@ def load_oss_kpi(path: Path) -> pd.DataFrame:
     work["site"] = work["eNodeB Name"].astype(str).str.strip()
     work["vol"] = pd.to_numeric(work[OSS_VOL_COL], errors="coerce")
     work["users"] = pd.to_numeric(work[OSS_USER_COL], errors="coerce")
+    work["mean_user"] = pd.to_numeric(work[OSS_MEAN_USER_COL], errors="coerce")
     work["tp_n"] = pd.to_numeric(work[OSS_TP_N_COL], errors="coerce")
     work["tp_d"] = pd.to_numeric(work[OSS_TP_D_COL], errors="coerce")
     work["prb_n"] = pd.to_numeric(work[OSS_PRB_N_COL], errors="coerce")
@@ -1334,6 +1337,7 @@ def _score_oss_busy(
     n_prb = d_prb = 0.0
     vols: list[float] = []
     users: list[float] = []
+    mean_users: list[float] = []
     for day in days:
         g = frame[frame["Date"] == day]
         hours = _top_n_hours(g, value_col, n)
@@ -1354,6 +1358,7 @@ def _score_oss_busy(
             d_prb += float(sub["prb_d"].sum(skipna=True))
             vols.extend(sub["vol"].tolist())
             users.extend(sub["users"].tolist())
+            mean_users.extend(sub["mean_user"].tolist())
     window = n * len(days)
     prb = _oss_ratio(n_prb, d_prb)
     return {
@@ -1369,11 +1374,18 @@ def _score_oss_busy(
         "prb": 100.0 * prb if np.isfinite(prb) else float("nan"),
         "avg_vol": _nanmean(vols),
         "avg_users": _nanmean(users),
+        "avg_mean_user": _nanmean(mean_users),
     }
 
 
 def _block_fields(
-    prefix: str, scored: dict, tp_key: str, vol_key: str, user_key: str, prb_key: str
+    prefix: str,
+    scored: dict,
+    tp_key: str,
+    vol_key: str,
+    user_key: str,
+    prb_key: str,
+    mean_key: str,
 ) -> dict:
     return {
         f"{prefix}_hours": scored["hours"],
@@ -1387,6 +1399,7 @@ def _block_fields(
         vol_key: scored["avg_vol"],
         user_key: scored["avg_users"],
         prb_key: scored["prb"],
+        mean_key: scored["avg_mean_user"],
     }
 
 
@@ -1435,22 +1448,22 @@ def analyse_urgent_busy_hours(
                 **rec,
                 "busy_days": days,
                 **_block_fields(
-                    "data", d7, "tp_data_7h", "vol_data_7h", "users_data_7h", "prb_data_7h"
+                    "data", d7, "tp_data_7h", "vol_data_7h", "users_data_7h", "prb_data_7h", "mean_data_7h"
                 ),
                 **_block_fields(
-                    "user", u7, "tp_user_7h", "vol_user_7h", "users_user_7h", "prb_user_7h"
+                    "user", u7, "tp_user_7h", "vol_user_7h", "users_user_7h", "prb_user_7h", "mean_user_7h"
                 ),
                 **_block_fields(
-                    "data4", d4, "tp_data_4h", "vol_data_4h", "users_data_4h", "prb_data_4h"
+                    "data4", d4, "tp_data_4h", "vol_data_4h", "users_data_4h", "prb_data_4h", "mean_data_4h"
                 ),
                 **_block_fields(
-                    "user4", u4, "tp_user_4h", "vol_user_4h", "users_user_4h", "prb_user_4h"
+                    "user4", u4, "tp_user_4h", "vol_user_4h", "users_user_4h", "prb_user_4h", "mean_user_4h"
                 ),
                 **_block_fields(
-                    "data1", d1, "tp_data_1h", "vol_data_1h", "users_data_1h", "prb_data_1h"
+                    "data1", d1, "tp_data_1h", "vol_data_1h", "users_data_1h", "prb_data_1h", "mean_data_1h"
                 ),
                 **_block_fields(
-                    "user1", u1, "tp_user_1h", "vol_user_1h", "users_user_1h", "prb_user_1h"
+                    "user1", u1, "tp_user_1h", "vol_user_1h", "users_user_1h", "prb_user_1h", "mean_user_1h"
                 ),
                 "data_busy_poor": _poor_dl(d7["tp"], d4["tp"], d1["tp"]),
                 "user_busy_poor": _poor_dl(u7["tp"], u4["tp"], u1["tp"]),
@@ -1497,6 +1510,7 @@ def _chart_side_table(ws, top: int, busy: dict, formats: dict) -> None:
                 ("DLPRBUtilization,%", "prb_data_4h"),
                 ("Data Volume 4h (GB)", "vol_data_4h"),
                 ("Max User 4h", "users_data_4h"),
+                ("Mean User 4H", "mean_data_4h"),
             ),
         ),
         (
@@ -1507,6 +1521,7 @@ def _chart_side_table(ws, top: int, busy: dict, formats: dict) -> None:
                 ("DLPRBUtilization,%", "prb_user_4h"),
                 ("Data Volume 4h (GB)", "vol_user_4h"),
                 ("Max User 4h", "users_user_4h"),
+                ("Mean User 4H", "mean_user_4h"),
             ),
         ),
         (
@@ -1517,6 +1532,7 @@ def _chart_side_table(ws, top: int, busy: dict, formats: dict) -> None:
                 ("DLPRBUtilization,%", "prb_data_1h"),
                 ("Data Volume 1h (GB)", "vol_data_1h"),
                 ("Max User 1h", "users_data_1h"),
+                ("Mean User 1H", "mean_data_1h"),
             ),
         ),
         (
@@ -1527,6 +1543,7 @@ def _chart_side_table(ws, top: int, busy: dict, formats: dict) -> None:
                 ("DLPRBUtilization,%", "prb_user_1h"),
                 ("Data Volume 1h (GB)", "vol_user_1h"),
                 ("Max User 1h", "users_user_1h"),
+                ("Mean User 1H", "mean_user_1h"),
             ),
         ),
     )
@@ -2141,8 +2158,17 @@ def _write_method(book, styles, source_name, period_txt, n_sites, records):
             "Site List 4H / 1H OSS KPIs",
             "The four blocks after Site Type on 1. Site List copy DataBusyHour "
             "and UserBusyHour 4h / 1h values from URGENTBWINC_BusyHour: "
-            "DL Throughput, DLPRBUtilization,%, Data Volume, and Max User. "
+            "DL Throughput, DLPRBUtilization,%, Data Volume, Max User, and "
+            "Mean User (average Mean User over that block’s busy hours). "
             "Blank means the issue site is not in the OSS BusyHour scan.",
+        ),
+        (
+            "Missing FEG port",
+            f"Sheet {MISSING_FEG_SHEET} lists every eNodeB in the capacity OSS KPI "
+            "that is absent from the FEG file. The FEG port is not configured, so "
+            "FEG KPI is not collected and the site is not choke-scored. The compare "
+            "is FEG versus OSS, not the physical site database. Configure the FEG port "
+            "for each listed site.",
         ),
     ]
     for i, (key, val) in enumerate(kept):
@@ -2275,10 +2301,11 @@ def _write_method(book, styles, source_name, period_txt, n_sites, records):
             "Not added to BH Flag.",
         ),
         (
-            "Data Volume / Max User 7h / 4h / 1h",
-            "Average Data Volume,GB and average Max User over that block’s own "
-            "busy hours (7 × 3, 4 × 3, or 1 × 3). DataBusyHour uses top volume "
-            "hours; UserBusyHour uses top Max User hours. Not added to BH Flag.",
+            "Data Volume / Max User / Mean User 7h / 4h / 1h",
+            "Average Data Volume,GB, average Max User, and average Mean User "
+            "over that block’s own busy hours (7 × 3, 4 × 3, or 1 × 3). "
+            "DataBusyHour uses top volume hours; UserBusyHour uses top Max User "
+            "hours. Mean User uses those same hours. Not added to BH Flag.",
         ),
         (
             "4 BH Flag",
@@ -2789,6 +2816,13 @@ def _write_geoplot(
 BLOCK_ROWS = 32
 
 
+def missing_feg_port_sites(oss: pd.DataFrame, work: pd.DataFrame) -> list[str]:
+    """OSS KPI sites with no FEG row. The FEG port is not configured for these."""
+    feg = set(work["eNodeB Name"].astype(str).str.strip())
+    oss_sites = set(oss["site"].astype(str).str.strip())
+    return sorted(site for site in (oss_sites - feg) if site and site.lower() != "nan")
+
+
 def _dump_report_cache(
     source_name: str,
     work: pd.DataFrame,
@@ -2797,6 +2831,7 @@ def _dump_report_cache(
     tech_summary,
     tech_by_site,
     busy_rows: list[dict],
+    missing_feg_sites: list[str],
 ) -> None:
     REPORT_CACHE.write_bytes(
         pickle.dumps(
@@ -2808,6 +2843,7 @@ def _dump_report_cache(
                 "tech_summary": tech_summary,
                 "tech_by_site": tech_by_site,
                 "busy_rows": busy_rows,
+                "missing_feg_sites": missing_feg_sites,
                 "oss_file": OSS_FILE,
             },
             protocol=pickle.HIGHEST_PROTOCOL,
@@ -2822,13 +2858,15 @@ def _refresh_busy_rows(
     geo,
     tech_by_site: dict[str, str],
     source: Path | None = None,
-) -> list[dict]:
+) -> tuple[list[dict], list[str]]:
     oss_path = ensure_capacity_site_oss()
-    print("Scoring OSS BusyHour Data Volume / Max User / DL PRB Utilization...")
+    print("Scoring OSS BusyHour Data Volume / Max User / Mean User / DL PRB Utilization...")
     oss = load_oss_kpi(oss_path)
     busy_rows = analyse_urgent_busy_hours(oss, records, work, tech_by_site)
     _attach_site_type(busy_rows, geo)
-    return busy_rows
+    missing = missing_feg_port_sites(oss, work)
+    print(f"OSS sites missing from FEG (configure FEG port): {len(missing)}", flush=True)
+    return busy_rows, missing
 
 
 def main() -> None:
@@ -2842,7 +2880,7 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output",
-        default="FEGE_Choked_Flat_Sites_NCCD_v4.xlsx",
+        default="FEGE_Choked_Flat_Sites_NCCD_v5.xlsx",
         help="Report workbook to write",
     )
     parser.add_argument(
@@ -2876,16 +2914,26 @@ def main() -> None:
         if (
             not busy_rows
             or "prb_data_7h" not in busy_rows[0]
+            or "mean_data_4h" not in busy_rows[0]
+            or "missing_feg_sites" not in cache
             or cache.get("oss_file") != OSS_FILE
         ):
             geo, tech_by_site, tech_summary = _apply_live_geo(work, records)
-            busy_rows = _refresh_busy_rows(records, work, geo, tech_by_site)
+            busy_rows, missing_feg_sites = _refresh_busy_rows(records, work, geo, tech_by_site)
             _dump_report_cache(
-                source_name, work, records, geo, tech_summary, tech_by_site, busy_rows
+                source_name,
+                work,
+                records,
+                geo,
+                tech_summary,
+                tech_by_site,
+                busy_rows,
+                missing_feg_sites,
             )
         else:
             busy_rows = _attach_window_filter_flags(busy_rows)
             geo, tech_by_site, tech_summary = _apply_live_geo(work, records, busy_rows)
+            missing_feg_sites = list(cache.get("missing_feg_sites") or [])
     else:
         source = resolve_source(Path(args.source))
         source_name = source.name
@@ -2916,9 +2964,18 @@ def main() -> None:
         chart_end = work["Date"].max().normalize()
         chart_start = chart_end - pd.Timedelta(days=SNAP_DAYS - 1)
         _attach_chart_peaks(work, records, chart_start, chart_end)
-        busy_rows = _refresh_busy_rows(records, work, geo, tech_by_site, source)
+        busy_rows, missing_feg_sites = _refresh_busy_rows(
+            records, work, geo, tech_by_site, source
+        )
         _dump_report_cache(
-            source_name, work, records, geo, tech_summary, tech_by_site, busy_rows
+            source_name,
+            work,
+            records,
+            geo,
+            tech_summary,
+            tech_by_site,
+            busy_rows,
+            missing_feg_sites,
         )
 
     # Snapshots are laid out at a fixed stride so the site-list links can be
@@ -2939,6 +2996,7 @@ def main() -> None:
         busy_rows,
         skip_heavy=args.fast,
         compare_rows=compare_rows,
+        missing_feg_sites=missing_feg_sites,
     )
     print(
         f"Workbook write {pytime.perf_counter() - t_write:.1f}s"
@@ -3027,6 +3085,7 @@ def _write_summary(
     records,
     tech_summary=None,
     tech_by_site=None,
+    missing_feg_sites: list[str] | None = None,
 ):
     """One sheet that shows the result without opening the other pages."""
     ws = book.add_worksheet("Dashboard")
@@ -3094,14 +3153,14 @@ def _write_summary(
         f"NCCD transmission    ·    {period_txt}    ·    hourly    ·    {source_name}",
         styles["subtitle"],
     )
-    ws.set_row(2, 36)
+    n_missing = len(missing_feg_sites or [])
+    ws.set_row(2, 48)
     ws.merge_range(
         "A3:J3",
-        f"Sites checked is every eNodeB in the FEG file ({n_sites:,}). "
-        "A site is not dropped because it is missing from the physical site database. "
-        "Issue sites with no database row stay on the choke list and the hourly charts. "
-        "They are named at the top of GeoPlot and are not mapped. "
-        "Sites that appear only in the OSS file are not in the FEG file, so they are not choke-scored.",
+        f"Missing FEG port: {n_missing:,} sites are in the OSS KPI and are not in the FEG file. "
+        "The FEG port is not configured for these sites, so FEG KPI is not collected and they are not choke-scored. "
+        f"Configure the FEG port for every site on {MISSING_FEG_SHEET}. "
+        "This compare is FEG versus OSS KPI, not the physical site database.",
         styles["note"],
     )
 
@@ -3419,6 +3478,7 @@ def _write_workbook(
     busy_rows: list[dict] | None = None,
     skip_heavy: bool = False,
     compare_rows: list[dict] | None = None,
+    missing_feg_sites: list[str] | None = None,
 ) -> None:
     """Write the report. List links use the fixed snapshot block stride."""
     import xlsxwriter
@@ -3438,7 +3498,15 @@ def _write_workbook(
     if not skip_heavy and records and "peak_72" not in records[0]:
         _attach_chart_peaks(work, records, chart_start, chart_end)
     _write_summary(
-        book, styles, source_name, period_txt, n_sites, records, tech_summary, tech_by_site
+        book,
+        styles,
+        source_name,
+        period_txt,
+        n_sites,
+        records,
+        tech_summary,
+        tech_by_site,
+        missing_feg_sites,
     )
     _write_list_linked(
         book, styles, source_name, period_txt, n_sites, records, busy_rows or []
@@ -3459,7 +3527,50 @@ def _write_workbook(
     if not skip_heavy and geo is not None and len(geo):
         print("Writing GeoPlot...", flush=True)
         _write_geoplot(book, styles, work, records, geo, path, tech_by_site)
+    _write_missing_feg_port(book, styles, missing_feg_sites or [])
     book.close()
+
+
+def _write_missing_feg_port(book, styles, sites: list[str]) -> None:
+    """OSS sites with no FEG row. Configure the FEG port for each one."""
+    ws = book.add_worksheet(MISSING_FEG_SHEET)
+    _page(ws, "Missing FEG port — configure FEG KPI")
+    ws.set_tab_color("#C65911")
+    headers = ["No.", "eNodeB Name", "In OSS KPI", "In FEG KPI", "Action"]
+    widths = [8, 18, 16, 16, 28]
+    for col, width in enumerate(widths):
+        ws.set_column(col, col, width)
+    ws.set_row(0, 28)
+    ws.merge_range(0, 0, 0, 4, "Missing FEG port — configure FEG KPI", styles["title"])
+    ws.set_row(1, 36)
+    ws.merge_range(
+        1,
+        0,
+        1,
+        4,
+        f"{len(sites):,} sites are in the OSS KPI and missing from the FEG file. "
+        "The FEG port is not configured, so FEG KPI is not collected and these sites "
+        "are not choke-scored. Configure the FEG port for each site below. "
+        "This list is FEG versus OSS KPI, not the physical site database.",
+        styles["note"],
+    )
+    ws.set_row(3, 22)
+    for col, text in enumerate(headers):
+        ws.write(3, col, text, styles["header"])
+    for i, site in enumerate(sites):
+        row = 4 + i
+        zebra = i % 2 == 1
+        c = styles["center_z"] if zebra else styles["center"]
+        ws.write_number(row, 0, i + 1, styles["int_z"] if zebra else styles["int"])
+        ws.write_string(row, 1, site, styles["text_z"] if zebra else styles["text"])
+        ws.write_string(row, 2, "Yes", c)
+        ws.write_string(row, 3, "No", styles["yes"])
+        ws.write_string(row, 4, "Configure FEG port", c)
+    last = 4 + max(len(sites), 1) - 1
+    ws.autofilter(3, 0, last, 4)
+    ws.freeze_panes(4, 0)
+    ws.set_zoom(110)
+    print(f"Missing FEG port sheet: {len(sites)} sites", flush=True)
 
 
 def _write_list_linked(
@@ -3475,12 +3586,14 @@ def _write_list_linked(
         "DLPRBUtilization,%",
         "Data Volume 4h (GB)",
         "Max User 4h",
+        "Mean User 4h",
     ]
     kpi_1 = [
         "DL Throughput 1h (Mbps)",
         "DLPRBUtilization,%",
         "Data Volume 1h (GB)",
         "Max User 1h",
+        "Mean User 1h",
     ]
     headers = [
         "No.",
@@ -3506,7 +3619,7 @@ def _write_list_linked(
     ]
     last_col = len(headers) - 1
     last_col_letter = xl_rowcol_to_cell(0, last_col).rstrip("0123456789")
-    widths = [5, 14, 12, 12, 14, 16, 16, 16, 18, 16, 12, 32, 18, 12, 14, 14] + [16] * 16
+    widths = [5, 14, 12, 12, 14, 16, 16, 16, 18, 16, 12, 32, 18, 12, 14, 14] + [16] * 20
     for i, w in enumerate(widths):
         ws.set_column(i, i, w)
 
@@ -3532,13 +3645,13 @@ def _write_list_linked(
     hdr_user4 = _busy_section_header(book, "#B7950B", "white")
     hdr_data1 = _busy_section_header(book, "#6C3483", "white")
     hdr_user1 = _busy_section_header(book, "#1A5276", "white")
-    col_fmt = [styles["header"]] * 16 + [hdr_data4] * 4 + [hdr_user4] * 4 + [hdr_data1] * 4 + [hdr_user1] * 4
+    col_fmt = [styles["header"]] * 16 + [hdr_data4] * 5 + [hdr_user4] * 5 + [hdr_data1] * 5 + [hdr_user1] * 5
     ws.set_row(group_row, 22)
     ws.merge_range(group_row, 0, group_row, 15, "Site", hdr_site)
-    ws.merge_range(group_row, 16, group_row, 19, "DataBusyHour (4 BusyHour)", hdr_data4)
-    ws.merge_range(group_row, 20, group_row, 23, "UserBusyHour (4 BusyHour)", hdr_user4)
-    ws.merge_range(group_row, 24, group_row, 27, "DataBusyHour (1 BusyHour)", hdr_data1)
-    ws.merge_range(group_row, 28, group_row, 31, "UserBusyHour (1 BusyHour)", hdr_user1)
+    ws.merge_range(group_row, 16, group_row, 20, "DataBusyHour (4 BusyHour)", hdr_data4)
+    ws.merge_range(group_row, 21, group_row, 25, "UserBusyHour (4 BusyHour)", hdr_user4)
+    ws.merge_range(group_row, 26, group_row, 30, "DataBusyHour (1 BusyHour)", hdr_data1)
+    ws.merge_range(group_row, 31, group_row, 35, "UserBusyHour (1 BusyHour)", hdr_user1)
     ws.set_row(header_row, 36)
     for col, text in enumerate(headers):
         ws.write(header_row, col, text, col_fmt[col])
@@ -3600,18 +3713,22 @@ def _write_list_linked(
             "prb_data_4h",
             "vol_data_4h",
             "users_data_4h",
+            "mean_data_4h",
             "tp_user_4h",
             "prb_user_4h",
             "vol_user_4h",
             "users_user_4h",
+            "mean_user_4h",
             "tp_data_1h",
             "prb_data_1h",
             "vol_data_1h",
             "users_data_1h",
+            "mean_data_1h",
             "tp_user_1h",
             "prb_user_1h",
             "vol_user_1h",
             "users_user_1h",
+            "mean_user_1h",
         )
         for offset, key in enumerate(kpi_keys):
             _num(row, 16 + offset, busy.get(key, float("nan")))
@@ -3716,7 +3833,8 @@ def _write_list_linked(
         "for the same eNodeB: DataBusyHour (4 BusyHour), UserBusyHour (4 BusyHour), "
         "DataBusyHour (1 BusyHour), UserBusyHour (1 BusyHour). Each block has "
         "DL Throughput, DLPRBUtilization,% = (DL PRB Utilization_N / DL PRB "
-        "Utilization_D) × 100, Data Volume, and Max User. Blank means the site is "
+        "Utilization_D) × 100, Data Volume, Max User, and Mean User (average "
+        "Mean User over that block’s busy hours). Blank means the site is "
         "not in the OSS BusyHour scan.",
         styles["body"],
     )
@@ -4105,6 +4223,7 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
         "DLPRBUtilization,%",
         "Data Volume 7h (GB)",
         "Max User 7h",
+        "Mean User 7h",
     ]
     match_4 = [
         "Hours matched",
@@ -4115,6 +4234,7 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
         "DLPRBUtilization,%",
         "Data Volume 4h (GB)",
         "Max User 4h",
+        "Mean User 4h",
     ]
     match_1 = [
         "Hours matched",
@@ -4125,6 +4245,7 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
         "DLPRBUtilization,%",
         "Data Volume 1h (GB)",
         "Max User 1h",
+        "Mean User 1h",
     ]
     id_headers = [
         "No.",
@@ -4168,7 +4289,7 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
     last_col = len(headers) - 1
     day_widths = [22] * len(days)
     day1_widths = [12] * len(days)
-    match_widths = [12, 14, 16, 16, 16, 16, 16, 12]
+    match_widths = [12, 14, 16, 16, 16, 16, 16, 12, 14]
     widths = (
         [5, 16, 10, 12, 14, 12, 12, 14, 22, 22, 16, 16, 22, 22, 16, 16, 22, 22, 16, 16]
         + day_widths
@@ -4367,6 +4488,7 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
             prb_key: str,
             vol_key: str,
             user_key: str,
+            mean_key: str,
         ) -> int:
             pos = col
             window_n = rec.get(
@@ -4394,6 +4516,8 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
             _num(row, pos, rec.get(vol_key), n)
             pos += 1
             _num(row, pos, rec.get(user_key), n)
+            pos += 1
+            _num(row, pos, rec.get(mean_key), n)
             return pos + 1
 
         for day in days:
@@ -4407,6 +4531,7 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
             "prb_data_7h",
             "vol_data_7h",
             "users_data_7h",
+            "mean_data_7h",
         )
         for day in days:
             ws.write_string(row, col, rec["user_hours"].get(day, ""), c)
@@ -4419,6 +4544,7 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
             "prb_user_7h",
             "vol_user_7h",
             "users_user_7h",
+            "mean_user_7h",
         )
         for day in days:
             ws.write_string(row, col, rec["data4_hours"].get(day, ""), c)
@@ -4431,6 +4557,7 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
             "prb_data_4h",
             "vol_data_4h",
             "users_data_4h",
+            "mean_data_4h",
         )
         for day in days:
             ws.write_string(row, col, rec["user4_hours"].get(day, ""), c)
@@ -4443,6 +4570,7 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
             "prb_user_4h",
             "vol_user_4h",
             "users_user_4h",
+            "mean_user_4h",
         )
         for day in days:
             ws.write_string(row, col, rec["data1_hours"].get(day, ""), c)
@@ -4455,6 +4583,7 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
             "prb_data_1h",
             "vol_data_1h",
             "users_data_1h",
+            "mean_data_1h",
         )
         for day in days:
             ws.write_string(row, col, rec["user1_hours"].get(day, ""), c)
@@ -4467,6 +4596,7 @@ def _write_busy_hour_plan(book, styles, period_txt, records, busy_rows: list[dic
             "prb_user_1h",
             "vol_user_1h",
             "users_user_1h",
+            "mean_user_1h",
         )
 
     last = header_row + max(len(busy_rows), 1)
