@@ -1,0 +1,16 @@
+---
+description: FEGE choke rules for the NCCD zone, copied from the Dhaka v84 agent
+alwaysApply: true
+---
+
+Follow `RULES.md` in the repo root. Those are the last FEGE site-choking rules (v84) copied from agent `bc-a7709455-0c4d-48fe-8e9d-0c3e0f5a86b3` (Fege site choking detection_Huawei).
+
+This repo is the NCCD zone. Use the same detection, listing, severity, chart, GeoPlot, UrgentTxBWInc, capacity-only OSS rollup, BusyHour flags, Site List 4H/1H block, and Comparison rules.
+
+Read uploaded files from the name. `OSS` in the name means OSS KPI. `FEG` or `FEGE` in the name means the FEG port KPI (`RxMaxSpeed` is the choke trace). A physical-site or site-database name means geo, Tech, and Site Type. A thana name means the GeoPlot thana list. Dates, V1/V2, and part numbers say how to combine files. They do not change what the file is. Do not require the old Dhaka filenames.
+
+OSS and FEG use the same combine order, kept as separate finals: for each date, merge V1 part1+part2, merge V2 part1+part2, then merge V1+V2. Do the same for every other date. If a later upload uses a different version or part count, follow the tokens in the names. Score the dates inside the files and keep every threshold in `RULES.md`. DHAPT35 and DHAPT48 are the shape pattern, not an NCCD name filter.
+
+The NCCD report for 8–10 Oct 2026 is built with the L900 coverage layer excluded. Skip the Comparison sheet until the user provides the previous FEG file.
+
+Keep the BusyHour column spelling **Chocked**. Do not use Tx Total BW to list or grade a site. Do not read the old site-level OSS RAR; roll cell-level OSS to site-hour and drop L900 (`MID(Cell Name, 8, 3)` starts with `L09`).
