@@ -1,5 +1,7 @@
 # FEGE site choking rules (v84)
 
+These rules are saved in `README.md`.
+
 Copied from agent `bc-a7709455-0c4d-48fe-8e9d-0c3e0f5a86b3` (“Fege site choking detection_Huawei”), branch `cursor/fege-choked-sites-86b3` on `Transport-Network-KPI-Check`. Last published Dhaka file: `FEGE_Choked_Flat_Sites_v84.xlsx`.
 
 This repo is the **NCCD** zone. Use these same rules. Do not build a report until the latest NCCD files are in the repo. When they arrive, score the dates in those files and keep every threshold below. The Dhaka reference window was **5–7 Oct 2026**.
@@ -326,8 +328,9 @@ Each block also shows, over **that block’s own busy hours only**:
 - DLPRBUtilization,% from N/D × 100
 - Average Data Volume (GB)
 - Average Max User
+- Average Mean User (the mean of Mean User over those same busy hours)
 
-Data Volume, Max User, and DLPRBUtilization,% are **not** inputs to BH Flag.
+Data Volume, Max User, Mean User, and DLPRBUtilization,% are **not** inputs to BH Flag.
 
 ### Yes flags (column order)
 
@@ -354,12 +357,12 @@ Filter the four columns of a group together with OR.
 
 Then the six blocks, left to right:
 
-1. DataBusyHour 7H (one column per day + Hours matched, %, Last day match, Listed because, DL Throughput 7h, DLPRBUtilization,%, Data Volume 7h, Max User 7h)
+1. DataBusyHour 7H (one column per day + Hours matched, %, Last day match, Listed because, DL Throughput 7h, DLPRBUtilization,%, Data Volume 7h, Max User 7h, Mean User 7h)
 2. UserBusyHour 7H (same)
-3. DataBusyHour 4H
-4. UserBusyHour 4H
-5. DataBusyHour 1H
-6. UserBusyHour 1H
+3. DataBusyHour 4H (same, with 4h names, including Mean User 4h)
+4. UserBusyHour 4H (same)
+5. DataBusyHour 1H (same, with 1h names, including Mean User 1h)
+6. UserBusyHour 1H (same)
 
 Header colours stay distinct per section (7H blue/teal, 4H orange/gold, 1H purple/navy, BH Flag amber, filter groups their own colours).
 
@@ -371,9 +374,9 @@ Sort: 4/1BH Flag, then 4 BH Flag, then 1 BH Flag, then the 1H choke/TP flags, th
 
 On `1. Site List`, immediately after Site Type, copy four blocks from URGENTBWINC_BusyHour:
 
-1. DataBusyHour (4 BusyHour): DL Throughput 4h, DLPRBUtilization,%, Data Volume 4h, Max User 4h
+1. DataBusyHour (4 BusyHour): DL Throughput 4h, DLPRBUtilization,%, Data Volume 4h, Max User 4h, Mean User 4h
 2. UserBusyHour (4 BusyHour): same
-3. DataBusyHour (1 BusyHour): DL Throughput 1h, DLPRBUtilization,%, Data Volume 1h, Max User 1h
+3. DataBusyHour (1 BusyHour): DL Throughput 1h, DLPRBUtilization,%, Data Volume 1h, Max User 1h, Mean User 1h
 4. UserBusyHour (1 BusyHour): same
 
 Blank means the issue site is not in the OSS BusyHour scan.
@@ -416,8 +419,29 @@ Sheet **Comparison**. All sites. RxMaxSpeed only (no Tx Total BW columns).
 | 5. GeoPlot | Maps only |
 | _GeoData | Hidden coordinates |
 | UrgentTxBWInc | Urgent upgrade list + thana summary |
-| URGENTBWINC_BusyHour | Capacity-only OSS busy hours, flags, 7/4/1 blocks |
+| URGENTBWINC_BusyHour | Capacity-only OSS busy hours, flags, 7/4/1 blocks, including Mean User |
+| 6. Missing FEG Port | OSS KPI sites with no FEG row. Action is to configure the FEG port. Compare FEG with OSS, not the physical site database |
+| 7. Immediate actions | Severe or High only. OR across Data 4H, User 4H, Data 1H, and User 1H. One tag per site |
 | Comparison | RxMaxSpeed ceiling step-up, when a previous window exists |
+
+Report file name must include the version: `FEGE_Choked_Flat_Sites_NCCD_vN.xlsx`.
+
+### Missing FEG port
+
+A site that is in the capacity OSS KPI and absent from the FEG file is not choke-scored. The FEG port is not configured, so FEG KPI is not collected. Dashboard row 3 states the count. Sheet `6. Missing FEG Port` lists every such site with action **Configure FEG port**. Do not use the physical site database for this compare.
+
+### Immediate actions
+
+Sheet `7. Immediate actions`. Severe or High only. OR across the four windows Data 4H, User 4H, Data 1H, and User 1H: if any one window matches, the site is listed.
+
+Each site is listed once, under the strongest customer-experience tag:
+
+1. High Priority: any of the four Data Volume values **> 100 GB**
+2. High Priority: any of the four DL throughput values **< 5 Mbps**
+3. Mid Priority: any of the four DL throughput values from **5 Mbps up to but not including 8 Mbps**
+4. Low Priority: any of the four DL throughput values from **8 Mbps through 10 Mbps**
+
+A louder window wins over a milder one. Volume above 100 GB wins over throughput. Throughput above 10 Mbps with volume at or under 100 GB is not listed.
 
 Excel freeze panes are off. Formula and scoring notes stay on Method, not on Dashboard or Site List.
 
@@ -431,7 +455,7 @@ Default output name follows the presentation version. Changing maps or Dashboard
 - Do not use Tx Total BW to list, grade, or set severity.
 - Do not use the old site-level OSS RAR. Capacity-only cell rollup only.
 - Do not limit URGENTBWINC_BusyHour to the UrgentTxBWInc list.
-- Do not add Data Volume, Max User, or DLPRBUtilization,% into BH Flag.
+- Do not add Data Volume, Max User, Mean User, or DLPRBUtilization,% into BH Flag.
 - Do not drop geo-located issue sites off the maps.
 - Do not commit combined KPI CSVs or RAR working files.
 - The confirmed 8–10 Oct 2026 upload is already scored. Do not add the Comparison sheet until the previous FEG file is provided.
